@@ -7,6 +7,10 @@
   "scripts": {
     "dev": "node local/dev-server.js",
     "seed-local": "node local/seed-local.js",
+    "test": "cd backend && npm test && cd ../frontend && npm test",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "test:integration": "cd backend && npm run test:integration",
     "deploy-backend": "cd backend && sam build && sam deploy",
     "deploy-frontend": "powershell -ExecutionPolicy Bypass -File frontend/deploy.ps1"
   },

@@ -3,6 +3,7 @@ node_modules/
 
 # SAM build artifacts
 .aws-sam/
+backend/test-env-vars.json
 
 # Floci persistent data
 local/data/

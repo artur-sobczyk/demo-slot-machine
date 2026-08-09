@@ -1,0 +1,11 @@
+{
+  "name": "slot-machine-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test draw-lambda/app.test.js seed-lambda/seed-records.test.js",
+    "test:all": "node --test **/*.test.js",
+    "test:integration": "node --test test-integration/sam-invoke.test.js"
+  }
+}

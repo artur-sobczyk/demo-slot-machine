@@ -141,3 +141,16 @@ Reads stack outputs, builds the SDK v3 bundle with esbuild, and deploys to Ampli
 cd backend
 sam delete --region eu-west-1
 ```
+
+## Testing
+
+```bash
+# Unit tests
+npm run test:backend      # Node.js test runner (determineWinner, seed data, writeSeedRecords)
+npm run test:frontend     # Vitest with jsdom (pull handle, Lambda invocation, winner display)
+
+# Integration test (requires Floci running + database seeded)
+npm run test:integration  # Invokes Lambda handler against Floci DynamoDB
+```
+
+Integration tests call the Lambda handler directly against Floci's emulated DynamoDB — no Docker Desktop or `sam local invoke` needed, just the Floci container running on port 4566.
