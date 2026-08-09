@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
+import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codestarconnections from 'aws-cdk-lib/aws-codestarconnections';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { IAspect, pipelines } from 'aws-cdk-lib';
@@ -54,14 +55,16 @@ export class SlotMachinePipelineStack extends cdk.Stack {
     });
 
     // Source stage: checkout main branch via CodeStar Connection
+    // triggerOnPush is disabled because we use V2 pipeline triggers with file path filters
     const source = pipelines.CodePipelineSource.connection('artur-sobczyk/demo-slot-machine', 'main', {
       connectionArn: connection.attrConnectionArn,
-      triggerOnPush: true,
+      triggerOnPush: false,
     });
 
     // Pipeline with self-mutating synth step
     const pipeline = new pipelines.CodePipeline(this, 'Pipeline', {
       pipelineName: 'SlotMachinePipeline',
+      pipelineType: codepipeline.PipelineType.V2,
       synth: new pipelines.ShellStep('Synth', {
         input: source,
         commands: [
@@ -102,6 +105,23 @@ export class SlotMachinePipelineStack extends cdk.Stack {
     pipeline.addStage(deployStage, {
       pre: [new pipelines.ManualApprovalStep('ManualApproval')],
       post: [backendDeployStep, frontendDeployStep, smokeTestStep],
+    });
+
+    // Build the underlying pipeline so we can access it for triggers
+    pipeline.buildPipeline();
+
+    // Add V2 trigger: only start pipeline when backend/, frontend/, or cicd/ files change on main
+    pipeline.pipeline.addTrigger({
+      providerType: codepipeline.ProviderType.CODE_STAR_SOURCE_CONNECTION,
+      gitConfiguration: {
+        sourceAction: pipeline.pipeline.stages[0].actions[0],
+        pushFilter: [
+          {
+            branchesIncludes: ['main'],
+            filePathsIncludes: ['backend/**', 'frontend/**', 'cicd/**'],
+          },
+        ],
+      },
     });
 
     // Apply 30-day CloudWatch Logs retention to all CodeBuild projects

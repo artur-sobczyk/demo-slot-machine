@@ -20,7 +20,7 @@ export function createSmokeTestStep(props: SmokeTestStepProps): pipelines.CodeBu
     env: {
       SAM_STACK_NAME: props.samStackName,
     },
-    timeout: Duration.seconds(60),
+    timeout: Duration.minutes(5),
     rolePolicyStatements: [
       new iam.PolicyStatement({
         actions: ['cloudformation:DescribeStacks'],
