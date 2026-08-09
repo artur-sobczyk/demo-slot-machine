@@ -1,0 +1,7 @@
+{
+  "name": "seed-data",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "DynamoDB seed data custom resource Lambda"
+}

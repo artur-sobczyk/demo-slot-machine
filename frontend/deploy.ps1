@@ -32,8 +32,6 @@ Write-Host "  Region:            $Region"
 
 # Build frontend
 Write-Host "Building frontend..."
-Push-Location frontend
-
 Copy-Item src/app.js src/app.build.js
 (Get-Content src/app.build.js) `
   -replace '\{\{AWS_REGION\}\}', $Region `
@@ -41,10 +39,9 @@ Copy-Item src/app.js src/app.build.js
   -replace '\{\{SLOT_FUNCTION_NAME\}\}', $SlotFunctionName |
   Set-Content src/app.build.js
 
-npx esbuild src/app.build.js --bundle --minify --outfile=../static/app.bundle.js --format=iife --platform=browser --target=es2020
+npx esbuild src/app.build.js --bundle --minify --outfile=static/app.bundle.js --format=iife --platform=browser --target=es2020
 
 Remove-Item src/app.build.js
-Pop-Location
 
 # Package
 Write-Host "Packaging..."

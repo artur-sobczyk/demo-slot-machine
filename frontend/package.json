@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "esbuild src/app.js --bundle --minify --outfile=../static/app.bundle.js --format=iife --platform=browser --target=es2020"
+    "build": "esbuild src/app.js --bundle --minify --outfile=static/app.bundle.js --format=iife --platform=browser --target=es2020"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.600.0",

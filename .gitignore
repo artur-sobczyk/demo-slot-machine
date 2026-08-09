@@ -5,16 +5,12 @@ node_modules/
 .aws-sam/
 
 # Floci persistent data
-data/
-
-# Lambda zip artifact
-src-lambda.zip
+local/data/
 
 # Frontend build output
-dist/
-frontend.zip
-static/app.bundle.js
-frontend/node_modules/
+frontend/static/app.bundle.js
+frontend/dist/
+frontend/frontend.zip
 
 # OS files
 .DS_Store

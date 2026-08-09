@@ -29,7 +29,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: nodejs22.x
-      CodeUri: seed-data/
+      CodeUri: seed-lambda/
       Handler: index.handler
       Environment:
         Variables:
@@ -48,7 +48,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: nodejs22.x
-      CodeUri: src/
+      CodeUri: draw-lambda/
       Handler: app.handler
       MemorySize: 128
       Timeout: 10

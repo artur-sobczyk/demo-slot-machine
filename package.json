@@ -5,15 +5,13 @@
   "private": true,
   "description": "Slot machine serverless application",
   "scripts": {
-    "dev": "node dev-server.js",
-    "deploy-local": "node deploy-local.js",
-    "seed-local": "node seed-data/seed-local.js",
-    "build-frontend": "cd frontend && npm run build",
-    "deploy-frontend": "powershell -ExecutionPolicy Bypass -File deploy-frontend.ps1"
+    "dev": "node local/dev-server.js",
+    "seed-local": "node local/seed-local.js",
+    "deploy-backend": "cd backend && sam build && sam deploy",
+    "deploy-frontend": "powershell -ExecutionPolicy Bypass -File frontend/deploy.ps1"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.600.0",
-    "@aws-sdk/client-lambda": "^3.600.0"
+    "@aws-sdk/client-dynamodb": "^3.600.0"
   },
   "devDependencies": {
     "express": "^4.21.0"

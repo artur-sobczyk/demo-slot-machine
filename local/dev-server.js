@@ -3,24 +3,25 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(__dirname, '..');
 
 // Set environment variables for the Lambda handler (pointing to Floci)
 process.env.TABLE_NAME = 'SlotPositionTable';
 process.env.DYNAMODB_ENDPOINT = 'http://localhost:4566';
 
 // Import the Lambda handler after env vars are set
-const { handler } = await import('./src/app.js');
+const { handler } = await import('../backend/draw-lambda/app.js');
 
 const app = express();
 const PORT = 3000;
 
 // Serve the local frontend at root
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'static', 'index-local.html'));
+  res.sendFile(path.join(rootDir, 'frontend', 'static', 'index-local.html'));
 });
 
 // Serve static frontend assets (images, css, etc.) but skip index.html
-app.use(express.static(path.join(__dirname, 'static'), { index: false }));
+app.use(express.static(path.join(rootDir, 'frontend', 'static'), { index: false }));
 
 // Invoke Lambda handler directly (DynamoDB calls go to Floci)
 app.post('/pull', async (req, res) => {
