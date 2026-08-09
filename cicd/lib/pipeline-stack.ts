@@ -2,36 +2,14 @@ import * as cdk from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codestarconnections from 'aws-cdk-lib/aws-codestarconnections';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import { IAspect, pipelines } from 'aws-cdk-lib';
-import { Construct, IConstruct } from 'constructs';
+import { pipelines } from 'aws-cdk-lib';
+import { Construct } from 'constructs';
 import { DeployStage } from './deploy-stage';
 import { createTestStep } from './steps/test-step';
 import { createBuildStep } from './steps/build-step';
 import { createBackendDeployStep } from './steps/backend-deploy-step';
 import { createFrontendDeployStep } from './steps/frontend-deploy-step';
 import { createSmokeTestStep } from './steps/smoke-test-step';
-
-/**
- * CDK Aspect that sets 30-day CloudWatch Logs retention on all CodeBuild project log groups.
- */
-class CodeBuildLogRetentionAspect implements IAspect {
-  public visit(node: IConstruct): void {
-    if (node instanceof codebuild.CfnProject) {
-      const logGroup = new logs.LogGroup(node, 'LogRetention', {
-        retention: logs.RetentionDays.ONE_MONTH,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
-      });
-
-      node.logsConfig = {
-        cloudWatchLogs: {
-          status: 'ENABLED',
-          groupName: logGroup.logGroupName,
-        },
-      };
-    }
-  }
-}
 
 export class SlotMachinePipelineStack extends cdk.Stack {
   public readonly samStackName: string;
@@ -67,6 +45,9 @@ export class SlotMachinePipelineStack extends cdk.Stack {
       pipelineType: codepipeline.PipelineType.V2,
       synth: new pipelines.ShellStep('Synth', {
         input: source,
+        installCommands: [
+          'n 20',
+        ],
         commands: [
           'cd cicd',
           'npm ci',
@@ -74,6 +55,11 @@ export class SlotMachinePipelineStack extends cdk.Stack {
         ],
         primaryOutputDirectory: 'cicd/cdk.out',
       }),
+      codeBuildDefaults: {
+        buildEnvironment: {
+          buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
+        },
+      },
     });
 
     // Shared props for step factories
@@ -123,8 +109,5 @@ export class SlotMachinePipelineStack extends cdk.Stack {
         ],
       },
     });
-
-    // Apply 30-day CloudWatch Logs retention to all CodeBuild projects
-    cdk.Aspects.of(this).add(new CodeBuildLogRetentionAspect());
   }
 }
