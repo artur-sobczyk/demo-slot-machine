@@ -1,0 +1,8 @@
+{
+  "app": "npx ts-node bin/pipeline.ts",
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true,
+    "samStackName": "slot-machine-stack",
+    "deployRegion": "eu-west-1"
+  }
+}

@@ -2,7 +2,9 @@
 
 A demo application showcasing AWS serverless capabilities. Pull the handle and see if three cards match — all running on fully managed AWS services with zero servers to maintain.
 
-<img src="docs/landing_page.png" alt="Slot Machine App" width="50%">
+<p align="center">
+  <img src="docs/landing_page.png" alt="Slot Machine App" width="50%">
+</p>
 
 ## What This Demonstrates
 
