@@ -1,0 +1,11 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "SlotPositionTableReadStatement",
+            "Effect": "Allow",
+            "Action": "dynamodb:GetItem",
+            "Resource": "arn:aws:dynamodb:eu-west-1:266349337517:table/SlotPositionTable"
+        }
+    ]
+}

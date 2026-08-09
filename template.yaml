@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Slot machine application - serverless backend with DynamoDB, Cognito, and Amplify Hosting
+
+Parameters:
+  CustomDomain:
+    Type: String
+    Default: ''
+    Description: Optional custom domain name for the Amplify Hosting app
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref CustomDomain, '']]
+
+Resources:
+  SlotPositionTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    Properties:
+      TableName: SlotPositionTable
+      AttributeDefinitions:
+        - AttributeName: slotPosition
+          AttributeType: N
+      KeySchema:
+        - AttributeName: slotPosition
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  SeedDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs22.x
+      CodeUri: seed-data/
+      Handler: index.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SlotPositionTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SlotPositionTable
+
+  SeedDataCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: SlotPositionTable
+    Properties:
+      ServiceToken: !GetAtt SeedDataFunction.Arn
+
+  SlotPositionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: nodejs22.x
+      CodeUri: src/
+      Handler: app.handler
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SlotPositionTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref SlotPositionTable
+
+  SlotPositionCognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      AllowUnauthenticatedIdentities: true
+
+  LambdaInvocationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref SlotPositionCognitoIdentityPool
+      Policies:
+        - PolicyName: LambdaInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt SlotPositionFunction.Arn
+
+  IdentityPoolRoleMapping:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref SlotPositionCognitoIdentityPool
+      Roles:
+        unauthenticated: !GetAtt LambdaInvocationRole.Arn
+
+  SlotMachineAmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: SlotMachineApp
+      Platform: WEB
+
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt SlotMachineAmplifyApp.AppId
+      BranchName: main
+
+  AmplifyDomain:
+    Type: AWS::Amplify::Domain
+    Condition: HasCustomDomain
+    Properties:
+      AppId: !GetAtt SlotMachineAmplifyApp.AppId
+      DomainName: !Ref CustomDomain
+      SubDomainSettings:
+        - BranchName: !GetAtt AmplifyBranch.BranchName
+          Prefix: ''
+
+Outputs:
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID for unauthenticated frontend access
+    Value: !Ref SlotPositionCognitoIdentityPool
+
+  SlotFunctionName:
+    Description: Slot position Lambda function name
+    Value: !Ref SlotPositionFunction
+
+  AmplifyDefaultUrl:
+    Description: Amplify Hosting app default URL
+    Value: !Sub https://main.${SlotMachineAmplifyApp.DefaultDomain}
+
+  SlotTableName:
+    Description: DynamoDB table name for slot position data
+    Value: !Ref SlotPositionTable

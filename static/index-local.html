@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Card Slots (Local Dev)</title>
+<link href="cardslots.css" rel="stylesheet" type="text/css">
+<script type="text/javascript">
+
+  var isSpinning = false;
+
+  function pullHandle() {
+    if (isSpinning === false) {
+      slot_handle.src = "lever-dn.png";
+    }
+  }
+
+  function initiatePull() {
+    slot_handle.src = "lever-up.png";
+    slot_L.src = "slotpullanimation.gif";
+    slot_M.src = "slotpullanimation.gif";
+    slot_R.src = "slotpullanimation.gif";
+
+    isSpinning = true;
+
+    fetch('/pull', { method: 'POST' })
+      .then(function(response) { return response.json(); })
+      .then(function(pullResults) {
+        displayPull(pullResults);
+      })
+      .catch(function(err) {
+        console.error('Pull failed:', err);
+        isSpinning = false;
+      });
+  }
+
+  function displayPull(pullResults) {
+    isSpinning = false;
+    if (pullResults.isWinner) {
+      document.getElementById('winner_light').style.visibility = 'visible';
+    } else {
+      document.getElementById('winner_light').style.visibility = 'hidden';
+    }
+    slot_L.src = pullResults.leftWheelImage.file.S;
+    slot_M.src = pullResults.middleWheelImage.file.S;
+    slot_R.src = pullResults.rightWheelImage.file.S;
+  }
+
+</script>
+</head>
+
+<body>
+  <div id="appframe">
+    <img id="slot_L" src="hart_q.png" height="199" width="80" alt="slot wheel 1"/>
+    <img id="slot_M" src="hart_q.png" height="199" width="80" alt="slot wheel 2"/>
+    <img id="slot_R" src="hart_q.png" height="199" width="80" alt="slot wheel 3"/>
+    <img id="slot_handle" src="lever-up.png" height="943" width="114" onMouseDown="pullHandle()" onMouseUp="initiatePull()"/>
+    <img id="winner_light" src="winner.png" height="48" width="247" alt="winner indicator" style="visibility: hidden;"/>
+  </div>
+</body>
+</html>

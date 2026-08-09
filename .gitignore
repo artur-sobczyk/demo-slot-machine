@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# SAM build artifacts
+.aws-sam/
+
+# Floci persistent data
+data/
+
+# Lambda zip artifact
+src-lambda.zip
+
+# Frontend build output
+dist/
+frontend.zip
+static/app.bundle.js
+frontend/node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment
+.env
+.env.local
