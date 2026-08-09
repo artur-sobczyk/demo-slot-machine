@@ -10,11 +10,15 @@ This design modernizes the slot machine application's AWS infrastructure from a 
 
 2. **Amplify Hosting over S3 static hosting**: Replaces the S3 bucket + bucket policy pattern with Amplify Hosting, which provides HTTPS, custom domain support, and simplified deployment without managing CloudFront or bucket policies.
 
-3. **Custom Resource for seed data**: A CloudFormation custom resource backed by a Lambda function populates DynamoDB during deployment, eliminating the need for manual `dynamo_data.js` execution.
+3. **Custom Resource for seed data**: A CloudFormation custom resource backed by a Lambda function populates DynamoDB during deployment, eliminating the need for manual data loading.
 
-4. **Finch-based local development**: Uses `docker-compose.yml` with DynamoDB Local and `sam local invoke` with Finch as the container runtime, enabling offline development without AWS credentials.
+4. **Floci-based local development**: Uses `docker-compose.yml` with Floci (local AWS emulator) and a dev server that invokes the Lambda handler directly, enabling offline development without AWS credentials.
 
 5. **OIDC-based CI/CD**: GitHub Actions pipeline uses OIDC federation for AWS credential assumption rather than long-lived access keys.
+
+6. **Monorepo structure**: Project split into `backend/` (SAM), `frontend/` (browser app), and `local/` (dev tooling) for clear separation of concerns.
+
+7. **Shared seed logic**: Seed data and write logic extracted into `seed-records.js` module, reused by both the CloudFormation custom resource Lambda and the local seed script.
 
 ## Architecture
 
@@ -22,48 +26,46 @@ This design modernizes the slot machine application's AWS infrastructure from a 
 graph TD
     subgraph "AWS Cloud"
         subgraph "SAM Stack"
-            AMPLIFY[Amplify Hosting<br/>static/ assets]
+            AMPLIFY[Amplify Hosting<br/>frontend/static/ assets]
             COGNITO[Cognito Identity Pool<br/>Unauthenticated Access]
-            LAMBDA[Slot Lambda<br/>nodejs22.x / SDK v3]
+            LAMBDA[Draw Lambda<br/>nodejs22.x / SDK v3]
             DYNAMO[DynamoDB<br/>SlotPositionTable]
-            SEED[Seed Custom Resource<br/>Lambda]
+            SEED[Seed Lambda<br/>Custom Resource]
             IAM_ROLE[IAM Unauthenticated Role<br/>lambda:InvokeFunction]
         end
     end
 
     subgraph "Client"
-        BROWSER[Browser]
+        BROWSER[Browser<br/>SDK v3 + esbuild bundle]
     end
 
     subgraph "Local Development"
-        FINCH[Finch / docker-compose]
-        DDB_LOCAL[DynamoDB Local :8000]
-        SAM_LOCAL[sam local invoke]
+        FLOCI[Floci / docker-compose<br/>port 4566]
+        DEV_SERVER[Dev Server<br/>Express :3000]
     end
 
     BROWSER -->|HTTPS| AMPLIFY
-    BROWSER -->|Get Credentials| COGNITO
+    BROWSER -->|GetId + GetCredentials| COGNITO
     COGNITO -->|Assume Role| IAM_ROLE
     BROWSER -->|Invoke| LAMBDA
     LAMBDA -->|GetItem x3| DYNAMO
-    SEED -->|BatchWriteItem| DYNAMO
+    SEED -->|PutItem x11| DYNAMO
 
-    SAM_LOCAL -->|invoke| LAMBDA
-    LAMBDA -.->|DYNAMODB_ENDPOINT override| DDB_LOCAL
-    FINCH -->|runs| DDB_LOCAL
+    DEV_SERVER -->|calls handler directly| LAMBDA
+    LAMBDA -.->|DYNAMODB_ENDPOINT override| FLOCI
 ```
 
 ### Request Flow
 
 1. Browser loads static assets from Amplify Hosting default URL (or custom domain)
-2. Frontend obtains temporary credentials from Cognito Identity Pool (unauthenticated flow)
-3. Frontend invokes Slot Lambda via AWS SDK using temporary credentials
+2. Frontend obtains temporary credentials from Cognito Identity Pool using `GetId` + `GetCredentialsForIdentity` (unauthenticated flow)
+3. Frontend invokes Draw Lambda via AWS SDK v3 using temporary credentials
 4. Lambda reads 3 random slot positions (0–10) from DynamoDB
 5. Lambda returns image filenames and winner status to the frontend
 
 ## Components and Interfaces
 
-### 1. SAM Template (`template.yaml`)
+### 1. SAM Template (`backend/template.yaml`)
 
 **Responsibility**: Declares all AWS resources for the stack.
 
@@ -76,7 +78,7 @@ graph TD
 | SeedDataCustomResource | AWS::CloudFormation::CustomResource | Triggers seed on deploy |
 | SlotPositionCognitoIdentityPool | AWS::Cognito::IdentityPool | Provides unauthenticated credentials |
 | LambdaInvocationRole | AWS::IAM::Role | Allows unauthenticated users to invoke Lambda |
-| IdentityPoolRoleAttachment | AWS::Cognito::IdentityPoolRoleAttachment | Maps role to identity pool |
+| IdentityPoolRoleMapping | AWS::Cognito::IdentityPoolRoleAttachment | Maps role to identity pool |
 | SlotMachineAmplifyApp | AWS::Amplify::App | Hosts static frontend |
 | AmplifyBranch | AWS::Amplify::Branch | Main branch for deployment |
 | AmplifyDomain | AWS::Amplify::Domain | Custom domain (conditional) |
@@ -90,7 +92,7 @@ graph TD
 - `AmplifyDefaultUrl`: Amplify app default URL
 - `SlotTableName`: DynamoDB table name
 
-### 2. Slot Lambda (`src/app.js`)
+### 2. Draw Lambda (`backend/draw-lambda/app.js`)
 
 **Responsibility**: Reads 3 random slot positions from DynamoDB, determines if all match (winner).
 
@@ -114,9 +116,13 @@ export const handler = async (event) => {
 - If `TABLE_NAME` is not set → throws error with descriptive message
 - If DynamoDB is unreachable → returns error response indicating data retrieval failure
 
-### 3. Seed Data Lambda (`seed-data/index.js`)
+### 3. Seed Lambda (`backend/seed-lambda/`)
 
 **Responsibility**: CloudFormation custom resource handler that writes 11 slot position records to DynamoDB on stack creation/update.
+
+**Files**:
+- `index.js` — Lambda handler (CloudFormation custom resource protocol)
+- `seed-records.js` — Shared module exporting `SLOT_DATA` array and `writeSeedRecords()` function
 
 **Interface**:
 ```javascript
@@ -124,7 +130,7 @@ export const handler = async (event) => {
 // Output: Sends SUCCESS/FAILED to CloudFormation response URL
 
 export const handler = async (event) => {
-  // On Create/Update: writes 11 records to SlotPositionTable
+  // On Create/Update: calls writeSeedRecords() to write 11 records
   // On Delete: no-op (table deletion handles cleanup)
   // Reports SUCCESS/FAILED to CloudFormation
 };
@@ -149,26 +155,59 @@ export const handler = async (event) => {
 | 9 | diam_k.png |
 | 10 | diam_q.png |
 
-### 4. Local Development (`docker-compose.yml`)
+### 4. Frontend Build (`frontend/`)
 
-**Responsibility**: Runs DynamoDB Local for offline development.
+**Responsibility**: Bundles AWS SDK v3 client code for the browser using esbuild.
+
+**Source**: `frontend/src/app.js`
+
+**Dependencies**:
+- `@aws-sdk/client-lambda` — Lambda invocation
+- `@aws-sdk/client-cognito-identity` — Cognito Identity Pool credentials (GetId + GetCredentialsForIdentity)
+- `esbuild` — JavaScript bundler (dev dependency)
+
+**Build output**: `frontend/static/app.bundle.js` (single minified IIFE bundle targeting ES2020)
+
+**Placeholders** (replaced at deploy time by `frontend/deploy.ps1`):
+- `{{AWS_REGION}}` — AWS region
+- `{{IDENTITY_POOL_ID}}` — Cognito Identity Pool ID
+- `{{SLOT_FUNCTION_NAME}}` — Lambda function name
+
+**Build command**: `npx esbuild src/app.js --bundle --minify --outfile=static/app.bundle.js --format=iife --platform=browser --target=es2020`
+
+### 5. Frontend Deployment Script (`frontend/deploy.ps1`)
+
+**Responsibility**: Automates frontend build and deployment to Amplify Hosting.
+
+**Steps**:
+1. Reads CloudFormation stack outputs (Identity Pool ID, Lambda name, Amplify App ID)
+2. Copies frontend source, replaces placeholders with stack values
+3. Bundles with esbuild
+4. Packages static assets into a zip
+5. Creates Amplify deployment and uploads zip
+6. Starts the Amplify deployment job
+
+### 6. Local Development (`local/`)
+
+**Responsibility**: Runs the full application locally using Floci as an AWS emulator.
+
+**Files**:
+- `docker-compose.yml` — Runs Floci on port 4566
+- `seed-local.js` — Creates table and seeds data (reuses `backend/seed-lambda/seed-records.js`)
+- `dev-server.js` — Express server on port 3000 that serves frontend and invokes the Lambda handler directly
 
 ```yaml
+# local/docker-compose.yml
 services:
-  dynamodb-local:
-    image: amazon/dynamodb-local:latest
+  floci:
+    image: floci/floci:latest
     ports:
-      - "8000:8000"
-    command: "-jar DynamoDBLocal.jar -sharedDb"
+      - "4566:4566"
+    volumes:
+      - ./data:/app/data
 ```
 
-### 5. Local Seed Script (`seed-data/seed-local.js`)
-
-**Responsibility**: Creates the table and populates DynamoDB Local with the same 11 records.
-
-**Interface**: CLI script run with `node seed-data/seed-local.js`
-
-### 6. GitHub Actions Workflow (`.github/workflows/deploy.yml`)
+### 7. GitHub Actions Workflow (`.github/workflows/deploy.yml`)
 
 **Responsibility**: Placeholder CI/CD pipeline for automated deployment.
 
@@ -180,7 +219,7 @@ services:
 3. `sam build`
 4. `sam deploy`
 
-### 7. SAM Config (`samconfig.toml`)
+### 8. SAM Config (`backend/samconfig.toml`)
 
 **Responsibility**: Stores default SAM CLI deployment parameters.
 
@@ -192,38 +231,6 @@ resolve_s3 = true
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
 parameter_overrides = "CustomDomain="
 ```
-
-### 8. Frontend Build (`frontend/`)
-
-**Responsibility**: Bundles AWS SDK v3 client code for the browser using esbuild.
-
-**Source**: `frontend/src/app.js`
-
-**Dependencies**:
-- `@aws-sdk/client-lambda` — Lambda invocation
-- `@aws-sdk/credential-providers` — Cognito Identity Pool credentials (unauthenticated)
-- `esbuild` — JavaScript bundler (dev dependency)
-
-**Build output**: `static/app.bundle.js` (single minified IIFE bundle targeting ES2020)
-
-**Placeholders** (replaced at deploy time by `deploy-frontend.sh`):
-- `{{AWS_REGION}}` — AWS region
-- `{{IDENTITY_POOL_ID}}` — Cognito Identity Pool ID
-- `{{SLOT_FUNCTION_NAME}}` — Lambda function name
-
-**Build command**: `npx esbuild src/app.js --bundle --minify --outfile=../static/app.bundle.js --format=iife --platform=browser --target=es2020`
-
-### 9. Frontend Deployment Script (`deploy-frontend.sh`)
-
-**Responsibility**: Automates frontend build and deployment to Amplify Hosting.
-
-**Steps**:
-1. Reads CloudFormation stack outputs (Identity Pool ID, Lambda name, Amplify App ID)
-2. Copies frontend source, replaces placeholders with stack values
-3. Bundles with esbuild
-4. Packages static assets into a zip
-5. Creates Amplify deployment and uploads zip
-6. Starts the Amplify deployment job
 
 ## Data Models
 
@@ -266,27 +273,22 @@ interface CustomResourceEvent {
 
 ### Seed Data Definition
 
-The seed data is defined as a constant array within the seed Lambda (`seed-data/index.js`):
+The seed data is defined in a shared module (`backend/seed-lambda/seed-records.js`):
 
 ```javascript
-const SLOT_DATA = [
+export const SLOT_DATA = [
   { slotPosition: 0, imageFile: 'spad_a.png' },
   { slotPosition: 1, imageFile: 'spad_k.png' },
-  { slotPosition: 2, imageFile: 'spad_q.png' },
-  { slotPosition: 3, imageFile: 'spad_j.png' },
-  { slotPosition: 4, imageFile: 'hart_a.png' },
-  { slotPosition: 5, imageFile: 'hart_k.png' },
-  { slotPosition: 6, imageFile: 'hart_q.png' },
-  { slotPosition: 7, imageFile: 'hart_j.png' },
-  { slotPosition: 8, imageFile: 'diam_a.png' },
-  { slotPosition: 9, imageFile: 'diam_k.png' },
+  // ... 11 records total
   { slotPosition: 10, imageFile: 'diam_q.png' },
 ];
+
+export async function writeSeedRecords(client, tableName) {
+  // Writes all records, returns count
+}
 ```
 
 ## Correctness Properties
-
-*A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
 ### Property 1: Winner determination is correct
 
@@ -308,7 +310,7 @@ const SLOT_DATA = [
 
 ## Error Handling
 
-### Slot Lambda (`src/app.js`)
+### Draw Lambda (`backend/draw-lambda/app.js`)
 
 | Condition | Behavior |
 |-----------|----------|
@@ -316,7 +318,7 @@ const SLOT_DATA = [
 | DynamoDB GetItem fails (network/throttle) | Return error response: `{ error: "Could not retrieve slot data" }` |
 | Random position returns no item | Treated as DynamoDB error (should not occur with seeded data) |
 
-### Seed Data Lambda (`seed-data/index.js`)
+### Seed Lambda (`backend/seed-lambda/index.js`)
 
 | Condition | Behavior |
 |-----------|----------|
@@ -341,7 +343,7 @@ Unit tests verify specific examples and edge cases using a standard test framewo
 
 **Framework**: Node.js built-in test runner (`node:test`) with `node:assert`
 
-**Slot Lambda unit tests**:
+**Draw Lambda unit tests**:
 - Handler returns correct response structure with valid slot data
 - Handler throws when TABLE_NAME is not set
 - Handler returns error response when DynamoDB is unreachable
@@ -364,31 +366,31 @@ Property-based tests verify universal correctness properties across randomized i
 
 **Tests**:
 
-1. **Feature: slot-machine-cdk-infra, Property 1: Winner determination is correct**
+1. **Property 1: Winner determination is correct**
    - Generate 3 arbitrary image filename strings
    - Call winner determination logic
    - Assert: result is `true` iff all three strings are equal
 
-2. **Feature: slot-machine-cdk-infra, Property 2: Seed data records satisfy schema constraints**
+2. **Property 2: Seed data records satisfy schema constraints**
    - For each record in SLOT_DATA array
    - Assert: slotPosition is integer in [0, 10], imageFile is non-empty string ≤ 50 chars matching `{suit}_{rank}.png`
 
-3. **Feature: slot-machine-cdk-infra, Property 3: DynamoDB client endpoint configuration**
+3. **Property 3: DynamoDB client endpoint configuration**
    - Generate arbitrary valid URL strings
    - Construct DynamoDB client with DYNAMODB_ENDPOINT set to that URL
    - Assert: client is configured with the generated endpoint
 
 ### Integration Tests
 
-Integration tests verify real AWS service interactions (run against DynamoDB Local):
+Integration tests verify real AWS service interactions (run against Floci):
 - Seed script creates table and populates 11 records
-- Lambda handler reads from DynamoDB Local and returns valid response
+- Lambda handler reads from Floci DynamoDB and returns valid response
 - Overwrite behavior: re-seeding overwrites existing records
 
 ### Smoke Tests
 
 Smoke tests verify infrastructure configuration (run after `sam build` or template validation):
-- `sam validate` passes on template.yaml
+- `sam validate` passes on `backend/template.yaml`
 - Template contains all required resources
 - Template outputs include all required keys
 - GitHub Actions workflow file has correct structure
