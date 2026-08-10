@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Upgrade to Node.js 20
+n 20
+hash -r
+
 # Install puppeteer (includes bundled Chromium)
 npm init -y && npm install puppeteer
 

@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Upgrade to Node.js 20 (CodeBuild standard:7.0 ships with Node 18)
+n 20
+hash -r
+
 # Install backend dependencies
 cd backend/draw-lambda && npm install
 cd ../..

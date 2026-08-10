@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Upgrade to Node.js 20
+n 20
+hash -r
+
 # Query CloudFormation for AmplifyDefaultUrl from the SAM stack outputs
 AMPLIFY_URL=$(aws cloudformation describe-stacks \
   --stack-name "$SAM_STACK_NAME" \
