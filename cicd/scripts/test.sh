@@ -16,9 +16,9 @@ cd frontend && npm ci
 cd ..
 
 # Run backend tests with JUnit reporter
-cd backend/draw-lambda && node --test --test-reporter=junit --test-reporter-destination=../../backend-results.xml
+cd backend/draw-lambda && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../backend-results.xml
 cd ../..
-cd backend/seed-lambda && node --test --test-reporter=junit --test-reporter-destination=../../backend-seed-results.xml
+cd backend/seed-lambda && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../backend-seed-results.xml
 cd ../..
 
 # Run frontend tests with JUnit reporter
