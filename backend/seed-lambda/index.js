@@ -1,5 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import https from 'https';
+import http from 'http';
 import { URL } from 'url';
 import { writeSeedRecords } from './seed-records.js';
 
@@ -14,10 +15,12 @@ async function sendResponse(event, status, reason) {
   });
 
   const parsedUrl = new URL(event.ResponseURL);
+  const isHttps = parsedUrl.protocol === 'https:';
+  const transport = isHttps ? https : http;
 
   const options = {
     hostname: parsedUrl.hostname,
-    port: 443,
+    port: parsedUrl.port || (isHttps ? 443 : 80),
     path: parsedUrl.pathname + parsedUrl.search,
     method: 'PUT',
     headers: {
@@ -27,7 +30,7 @@ async function sendResponse(event, status, reason) {
   };
 
   return new Promise((resolve, reject) => {
-    const req = https.request(options, () => resolve());
+    const req = transport.request(options, () => resolve());
     req.on('error', (err) => reject(err));
     req.write(responseBody);
     req.end();
