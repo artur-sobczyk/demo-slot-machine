@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Install backend dependencies
-cd backend/draw-lambda && npm ci
+cd backend/draw-lambda && npm install
 cd ../..
-cd backend/seed-lambda && npm ci
+cd backend/seed-lambda && npm install
 cd ../..
 
 # Install frontend dependencies
