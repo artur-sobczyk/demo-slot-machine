@@ -5,10 +5,10 @@ set -euo pipefail
 n 20
 hash -r
 
-# Install backend dependencies
-cd backend/draw-lambda && npm install
+# Install backend dependencies (including AWS SDK needed for tests)
+cd backend/draw-lambda && npm install @aws-sdk/client-dynamodb
 cd ../..
-cd backend/seed-lambda && npm install
+cd backend/seed-lambda && npm install @aws-sdk/client-dynamodb
 cd ../..
 
 # Install frontend dependencies
