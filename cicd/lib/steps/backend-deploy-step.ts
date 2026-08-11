@@ -126,9 +126,20 @@ export function createBackendDeployStep(props: BackendDeployStepProps): pipeline
         actions: [
           'amplify:CreateDeployment',
           'amplify:StartDeployment',
+          'amplify:GetApp',
+          'amplify:GetBranch',
+          'amplify:ListApps',
+          'amplify:ListBranches',
+          'amplify:CreateApp',
+          'amplify:UpdateApp',
+          'amplify:DeleteApp',
+          'amplify:CreateBranch',
+          'amplify:UpdateBranch',
+          'amplify:DeleteBranch',
         ],
         resources: [
-          `arn:aws:amplify:${props.region}:${props.account}:apps/*/branches/main`,
+          `arn:aws:amplify:${props.region}:${props.account}:apps/*`,
+          `arn:aws:amplify:${props.region}:${props.account}:apps/*/branches/*`,
         ],
       }),
       new iam.PolicyStatement({
