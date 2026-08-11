@@ -27,8 +27,9 @@ async function runSmokeTest() {
     console.log('Simulating mousedown + mouseup on #slot_handle...');
     const handle = await page.$('#slot_handle');
     await page.evaluate((el) => {
-      el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-      el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      // Call the inline handlers directly (they're global functions set via onMouseDown/onMouseUp attributes)
+      if (typeof window.pullHandle === 'function') window.pullHandle();
+      if (typeof window.initiatePull === 'function') window.initiatePull();
     }, handle);
 
     // Poll up to 15 seconds until all slot images have resolved
