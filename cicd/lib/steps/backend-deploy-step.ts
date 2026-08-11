@@ -45,6 +45,7 @@ export function createBackendDeployStep(props: BackendDeployStepProps): pipeline
         ],
         resources: [
           `arn:aws:cloudformation:${props.region}:${props.account}:stack/${props.samStackName}/*`,
+          `arn:aws:cloudformation:${props.region}:${props.account}:stack/aws-sam-cli-managed-default/*`,
           `arn:aws:cloudformation:${props.region}:aws:transform/Serverless-*`,
         ],
       }),
