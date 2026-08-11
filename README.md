@@ -2,6 +2,8 @@
 
 A demo application showcasing AWS serverless capabilities. Pull the handle and see if three cards match — all running on fully managed AWS services with zero servers to maintain.
 
+**Live demo:** https://demo-slotmachine.sircloud.pl/
+
 <p align="center">
   <img src="docs/landing_page.png" alt="Slot Machine App" width="50%">
 </p>
@@ -55,11 +57,14 @@ The frontend obtains temporary AWS credentials from Cognito (no sign-in required
 │   ├── src/                      # JS source (SDK v3, esbuild)
 │   ├── static/                   # HTML, CSS, images
 │   └── deploy.ps1               # Build + deploy to Amplify
+├── cicd/                         # CDK pipeline (CodePipeline V2)
+│   ├── lib/                      # Stack, stages, and step definitions
+│   ├── scripts/                  # Shell scripts for each pipeline step
+│   └── cdk.json                  # Pipeline configuration
 ├── local/                        # Local development
 │   ├── dev-server.js             # Express dev server
 │   ├── seed-local.js             # Seeds local DynamoDB (reuses seed-records.js)
 │   └── docker-compose.yml        # Floci (local AWS emulator)
-├── .github/workflows/            # CI/CD pipeline
 ├── package.json                  # Root scripts
 └── README.md
 ```
@@ -143,6 +148,137 @@ Reads stack outputs, builds the SDK v3 bundle with esbuild, and deploys to Ampli
 cd backend
 sam delete --region eu-west-1
 ```
+
+## CI/CD Pipeline
+
+The project uses AWS CodePipeline (V2) provisioned via CDK for fully automated deployments. The pipeline triggers on pushes to `main` that modify files in `backend/`, `frontend/`, or `cicd/`.
+
+```mermaid
+flowchart LR
+    A[Source<br/>GitHub main] --> B[Test<br/>Backend + Frontend]
+    B --> C[Build<br/>SAM + Frontend]
+    C --> D[Manual Approval]
+    D --> E[Deploy<br/>SAM + Amplify]
+    E --> F[Smoke Test<br/>Headless Browser]
+```
+
+### Pipeline Stages
+
+| Stage | What it does |
+|-------|-------------|
+| **Source** | Checks out the repo via CodeStar Connection (GitHub) |
+| **Synth** | Runs `cdk synth` to produce the pipeline's own CloudFormation template (self-mutating) |
+| **Test** | Installs deps and runs backend unit tests (Node test runner + JUnit) and frontend tests (Vitest + JUnit) |
+| **Build** | Runs `sam build`, injects stack outputs into frontend, bundles with esbuild, packages zip |
+| **Manual Approval** | Pauses for human approval before deploying to production |
+| **Backend Deploy** | Runs `sam deploy` against the SAM stack |
+| **Frontend Deploy** | Queries stack outputs, replaces config placeholders, bundles, uploads zip to Amplify Hosting |
+| **Smoke Test** | Launches headless Chromium via Puppeteer, pulls the slot handle, verifies slot images resolve |
+
+### Pipeline Configuration
+
+The CDK pipeline is in `cicd/` and parameterized via `cdk.json` context:
+
+```json
+{
+  "samStackName": "slot-machine-stack",
+  "deployRegion": "eu-west-1",
+  "customDomain": "demo-slotmachine.sircloud.pl"
+}
+```
+
+Override at synth time: `cdk synth -c deployRegion=us-east-1 -c customDomain=other.example.com`
+
+### Pipeline Structure
+
+```
+cicd/
+├── bin/pipeline.ts               # CDK app entry point
+├── lib/
+│   ├── pipeline-stack.ts         # Pipeline orchestration
+│   ├── deploy-stage.ts           # Deploy stage construct
+│   └── steps/                    # One file per pipeline step + IAM permissions
+│       ├── test-step.ts
+│       ├── build-step.ts
+│       ├── backend-deploy-step.ts
+│       ├── frontend-deploy-step.ts
+│       └── smoke-test-step.ts
+├── scripts/                      # Shell scripts executed by CodeBuild
+│   ├── test.sh
+│   ├── build.sh
+│   ├── deploy-backend.sh
+│   ├── deploy-frontend.sh
+│   ├── smoke-test.sh
+│   └── smoke-test.js             # Puppeteer smoke test logic
+├── cdk.json
+├── package.json
+└── tsconfig.json
+```
+
+### First-Time Setup
+
+1. Deploy the pipeline: `cd cicd && npx cdk deploy`
+2. Complete the GitHub OAuth handshake in the AWS Console (Developer Tools → Connections → set to AVAILABLE)
+3. Subsequent pushes to `main` trigger the pipeline automatically
+
+The pipeline is self-mutating — changes to `cicd/` are picked up and the pipeline updates itself before proceeding.
+
+### Running Pipeline Steps Locally
+
+You can execute the same scripts the pipeline runs from your local machine. Set the required environment variables first:
+
+```bash
+export SAM_STACK_NAME=slot-machine-stack
+export CUSTOM_DOMAIN=demo-slotmachine.sircloud.pl
+```
+
+Then run individual steps:
+
+```bash
+# Run tests
+./cicd/scripts/test.sh
+
+# Build SAM + frontend bundle
+./cicd/scripts/build.sh
+
+# Deploy backend (requires AWS credentials)
+./cicd/scripts/deploy-backend.sh
+
+# Deploy frontend to Amplify (requires AWS credentials)
+./cicd/scripts/deploy-frontend.sh
+
+# Run smoke test (requires puppeteer installed)
+export AMPLIFY_URL=https://main.d2zzc0oe8rmeue.amplifyapp.com
+npm install puppeteer
+node cicd/scripts/smoke-test.js
+```
+
+On Windows (PowerShell):
+
+```powershell
+$env:SAM_STACK_NAME = "slot-machine-stack"
+$env:CUSTOM_DOMAIN = "demo-slotmachine.sircloud.pl"
+
+# Run tests (requires Git Bash or WSL)
+bash cicd/scripts/test.sh
+
+# Deploy backend
+bash cicd/scripts/deploy-backend.sh
+
+# Deploy frontend
+bash cicd/scripts/deploy-frontend.sh
+
+# Smoke test (native Node.js, no bash needed)
+$env:AMPLIFY_URL = "https://main.d2zzc0oe8rmeue.amplifyapp.com"
+npm install puppeteer
+node cicd/scripts/smoke-test.js
+```
+
+**Prerequisites for local execution:**
+- AWS CLI configured with credentials that have deploy permissions
+- Node.js 20+
+- SAM CLI installed
+- `bash` available (Git Bash or WSL on Windows) for shell scripts
 
 ## Testing
 
