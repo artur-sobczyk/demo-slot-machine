@@ -36,7 +36,9 @@ export function createFrontendDeployStep(props: FrontendDeployStepProps): pipeli
           'amplify:StartDeployment',
         ],
         resources: [
-          `arn:aws:amplify:${props.region}:${props.account}:apps/*/branches/main`,
+          `arn:aws:amplify:${props.region}:${props.account}:apps/*`,
+          `arn:aws:amplify:${props.region}:${props.account}:apps/*/branches/*`,
+          `arn:aws:amplify:${props.region}:${props.account}:apps/*/branches/*/deployments/*`,
         ],
       }),
       new iam.PolicyStatement({
