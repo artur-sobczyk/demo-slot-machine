@@ -3,6 +3,7 @@
   "context": {
     "@aws-cdk/core:newStyleStackSynthesis": true,
     "samStackName": "slot-machine-stack",
-    "deployRegion": "eu-west-1"
+    "deployRegion": "eu-west-1",
+    "customDomain": "demo-slotmachine.sircloud.pl"
   }
 }

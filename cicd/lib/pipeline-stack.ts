@@ -23,6 +23,7 @@ export class SlotMachinePipelineStack extends cdk.Stack {
     }
 
     const deployRegion = this.node.tryGetContext('deployRegion') || 'eu-west-1';
+    const customDomain = this.node.tryGetContext('customDomain') || '';
 
     this.samStackName = samStackName;
 
@@ -63,7 +64,7 @@ export class SlotMachinePipelineStack extends cdk.Stack {
     });
 
     // Shared props for step factories
-    const stepProps = { region: this.region, account: this.account, samStackName };
+    const stepProps = { region: this.region, account: this.account, samStackName, customDomain };
 
     // Test wave
     const testStep = createTestStep({ input: source, ...stepProps });

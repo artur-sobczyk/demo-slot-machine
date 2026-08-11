@@ -5,6 +5,7 @@ import { pipelines } from 'aws-cdk-lib';
 export interface BackendDeployStepProps {
   input: pipelines.CodePipelineSource;
   samStackName: string;
+  customDomain: string;
   region: string;
   account: string;
 }
@@ -21,6 +22,7 @@ export function createBackendDeployStep(props: BackendDeployStepProps): pipeline
     },
     env: {
       SAM_STACK_NAME: props.samStackName,
+      CUSTOM_DOMAIN: props.customDomain,
       AWS_DEFAULT_REGION: props.region,
     },
     rolePolicyStatements: [

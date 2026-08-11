@@ -5,4 +5,3 @@ stack_name = "slot-machine-stack"
 region = "eu-west-1"
 resolve_s3 = true
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
-parameter_overrides = "CustomDomain="

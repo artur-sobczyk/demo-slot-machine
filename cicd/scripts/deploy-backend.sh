@@ -7,4 +7,5 @@ sam deploy \
   --config-file samconfig.toml \
   --no-confirm-changeset \
   --no-fail-on-empty-changeset \
-  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --parameter-overrides "CustomDomain=$CUSTOM_DOMAIN"
